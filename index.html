@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Mon YouTube avec Firebase</title>
+    <link rel="stylesheet" href="style.css">
+    </head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">MyTube Cloud</div>
+    </nav>
+
+    <div class="container">
+        <aside class="upload-section">
+            <h3>Publier une vidéo</h3>
+            <input type="text" id="channelName" placeholder="Nom de votre chaîne" required>
+            <input type="text" id="vidTitle" placeholder="Titre de la vidéo" required>
+            <textarea id="vidDesc" placeholder="Description..."></textarea>
+            <input type="file" id="videoFile" accept="video/*">
+            <button id="uploadBtn" class="btn">🚀 Envoyer la vidéo</button>
+            <p id="status"></p>
+        </aside>
+
+        <main class="feed">
+            <h2>Vidéos Récentes</h2>
+            <div id="videoGallery">
+                </div>
+        </main>
+    </div>
+
+    <script type="module">
+        // Importation des fonctions nécessaires
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        // --- COLLE TES IDENTIFIANTS FIREBASE ICI ---
+        const firebaseConfig = {
+            apiKey: "TA_API_KEY",
+            authDomain: "TON_PROJET.firebaseapp.com",
+            projectId: "TON_PROJET",
+            storageBucket: "TON_PROJET.appspot.com",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+        // -------------------------------------------
+
+        // Initialisation
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // 1. Logique d'Upload
+        document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const file = document.getElementById('videoFile').files[0];
+            const title = document.getElementById('vidTitle').value;
+            const desc = document.getElementById('vidDesc').value;
+            const channel = document.getElementById('channelName').value;
+            const statusTxt = document.getElementById('status');
+
+            if (!file || !title) {
+                alert("Veuillez remplir le titre et choisir un fichier.");
+                return;
+            }
+
+            statusTxt.textContent = "Upload en cours... Patientez...";
+
+            try {
+                // A. Upload de la vidéo dans le Storage (Disque dur)
+                const storageRef = ref(storage, 'videos/' + Date.now() + '-' + file.name);
+                await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(storageRef);
+
+                // B. Sauvegarde des infos dans Firestore (Base de données)
+                await addDoc(collection(db, "videos"), {
+                    title: title,
+                    description: desc,
+                    channel: channel,
+                    videoUrl: downloadURL,
+                    createdAt: new Date()
+                });
+
+                statusTxt.textContent = "Vidéo publiée avec succès !";
+                loadVideos(); // Recharger la liste
+            } catch (error) {
+                console.error("Erreur:", error);
+                statusTxt.textContent = "Erreur lors de l'upload.";
+            }
+        });
+
+        // 2. Logique de Lecture (Affichage)
+        async function loadVideos() {
+            const gallery = document.getElementById('videoGallery');
+            gallery.innerHTML = ""; // Vider la liste
+
+            // Récupérer les vidéos de la base de données
+            const q = query(collection(db, "videos"), orderBy("createdAt", "desc"));
+            const querySnapshot = await getDocs(q);
+
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                
+                // Création du HTML pour chaque vidéo
+                const videoCard = `
+                    <div class="video-post" style="margin-bottom: 30px; background: #202020; padding: 10px;">
+                        <video controls src="${data.videoUrl}" style="width: 100%;"></video>
+                        <h3>${data.title}</h3>
+                        <p style="color: #aaa; font-size: 12px;">Par <strong>${data.channel}</strong></p>
+                        <p>${data.description}</p>
+                    </div>
+                `;
+                gallery.innerHTML += videoCard;
+            });
+        }
+
+        // Charger les vidéos au démarrage
+        loadVideos();
+    </script>
+</body>
+</html>
