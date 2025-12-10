@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyTube Cloud - Chaînes Personnalisées</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css"> 
 </head>
 <body>
 
@@ -16,25 +16,24 @@
             
             <div id="userProfile" style="display: none; align-items: center; gap: 10px;">
                 <img id="userAvatar" src="" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%;">
-                <span id="userName">Pseudo</span>
+                <span id="userName">Pseudo</span> 
+                <button id="editChannelBtn" class="btn" style="background: #3a3a3a; font-size: 12px; padding: 4px 8px;">Modifier Chaîne</button>
                 <button id="logoutBtn" class="btn" style="background: #333;">Déconnexion</button>
             </div>
         </div>
     </nav>
 
     <div class="container">
+        
         <aside id="uploadSection" class="upload-section" style="display: none;">
             <h3>🎥 Publier sur ma chaîne</h3>
+            <p id="publish_hint" style="color: #FFC107; display: none;">🔒 **Attention :** Vous devez créer un nom de chaîne pour pouvoir publier.</p>
             <input type="text" id="vidTitle" placeholder="Titre de la vidéo" required>
             <textarea id="vidDesc" placeholder="Description..."></textarea>
             <input type="file" id="videoFile" accept="video/*">
             <button id="uploadBtn" class="btn">🚀 Envoyer la vidéo</button>
             <p id="status"></p>
         </aside>
-
-        <div id="loginMessage" style="padding: 20px; background: #202020; margin-bottom: 20px; display: block;">
-            <p>👋 Connectez-vous avec Google pour créer votre chaîne et publier des vidéos !</p>
-        </div>
 
         <main class="feed">
             <h2>Vidéos Récentes</h2>
@@ -65,12 +64,12 @@
 
         // --- CONFIGURATION FIREBASE (À REMPLACER) ---
         const firebaseConfig = {
-            apiKey: "AIzaSyDbX82YY7nE1WpkmNnSYzb5kJLKhSEWFME", // <--- REMPLACER
-            authDomain: "pamplemouchevideo.firebaseapp.com", // <--- REMPLACER
-            projectId: "pamplemouchevideo", // <--- REMPLACER
-            storageBucket: "pamplemouchevideo.firebasestorage.app", // <--- REMPLACER
-            messagingSenderId: "219220465922",
-            appId: "1:219220465922:web:7c95f3cba5c6726e7c8a1b"
+            apiKey: "TA_API_KEY", // <--- REMPLACER
+            authDomain: "TON_PROJET.firebaseapp.com", // <--- REMPLACER
+            projectId: "TON_PROJET", // <--- REMPLACER
+            storageBucket: "TON_PROJET.appspot.com", // <--- REMPLACER
+            messagingSenderId: "...",
+            appId: "..."
         };
         // -------------------------------------------
 
@@ -81,10 +80,19 @@
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
 
+        // Références aux éléments du DOM
+        const loginBtn = document.getElementById('loginBtn');
+        const userProfile = document.getElementById('userProfile');
+        const uploadSection = document.getElementById('uploadSection');
+        const modal = document.getElementById('channelSetupModal');
+        const publishHint = document.getElementById('publish_hint');
+        const editChannelBtn = document.getElementById('editChannelBtn'); // Nouveau bouton
+
+
         // --- 1. GESTION AUTHENTIFICATION ET PROFIL (Nom de Chaîne) ---
 
         // Connexion
-        document.getElementById('loginBtn').addEventListener('click', () => {
+        loginBtn.addEventListener('click', () => {
             signInWithPopup(auth, provider)
                 .catch((error) => console.error("Erreur de connexion", error));
         });
@@ -93,12 +101,25 @@
         document.getElementById('logoutBtn').addEventListener('click', () => {
             signOut(auth);
         });
+        
+        // Afficher la modale de modification de chaîne
+        editChannelBtn.addEventListener('click', async () => {
+            const user = auth.currentUser;
+            if (!user) return;
+            
+            // Pré-remplir l'input avec le nom actuel (si déjà défini)
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists() && userDoc.data().customChannelName) {
+                document.getElementById('customChannelNameInput').value = userDoc.data().customChannelName;
+            }
+            
+            modal.style.display = 'flex';
+        });
 
         // Sauvegarde du nom de chaîne personnalisé
         document.getElementById('saveChannelNameBtn').addEventListener('click', async () => {
             const user = auth.currentUser;
             const customName = document.getElementById('customChannelNameInput').value.trim();
-            const modal = document.getElementById('channelSetupModal');
 
             if (customName.length < 3) {
                 alert("Le nom de la chaîne doit contenir au moins 3 caractères.");
@@ -115,7 +136,11 @@
                 });
 
                 modal.style.display = 'none';
-                window.location.reload(); // Recharger l'interface
+                
+                // Mettre à jour immédiatement l'interface utilisateur sans recharger
+                document.getElementById('userName').textContent = customName;
+                publishHint.style.display = 'none'; // Cacher l'avertissement
+                // La section d'upload reste visible, mais sans le message d'avertissement
 
             } catch (error) {
                 console.error("Erreur lors de la sauvegarde du nom de chaîne:", error);
@@ -123,49 +148,43 @@
             }
         });
 
-        // Surveillance de l'état de connexion
+        // Surveillance de l'état de connexion : LA LOGIQUE CLÉ
         onAuthStateChanged(auth, async (user) => {
-            const uploadSection = document.getElementById('uploadSection');
-            const loginMessage = document.getElementById('loginMessage');
-            const loginBtn = document.getElementById('loginBtn');
-            const userProfile = document.getElementById('userProfile');
-            const modal = document.getElementById('channelSetupModal');
-
             if (user) {
-                // Utilisateur connecté. Vérifie si le profil de chaîne existe.
+                // 1. Utilisateur connecté : Préparer l'interface
+                loginBtn.style.display = 'none';
+                userProfile.style.display = 'flex';
+                uploadSection.style.display = 'block'; // Rendre la zone d'upload visible (avec un éventuel avertissement)
+
+                // 2. Vérifie si le profil de chaîne existe (nom personnalisé)
                 const userDocRef = doc(db, "users", user.uid);
                 const userDoc = await getDoc(userDocRef);
                 
-                if (userDoc.exists()) {
-                    // Profil trouvé : Affichage des infos personnalisées
+                if (userDoc.exists() && userDoc.data().customChannelName) {
+                    // 2a. PROFIL COMPLET : Affichage du nom personnalisé, publication autorisée
                     const profile = userDoc.data();
-                    
-                    loginBtn.style.display = 'none';
-                    loginMessage.style.display = 'none';
-                    userProfile.style.display = 'flex';
                     
                     document.getElementById('userName').textContent = profile.customChannelName;
                     document.getElementById('userAvatar').src = profile.avatarURL;
+                    publishHint.style.display = 'none'; // Pas d'avertissement
                     
-                    uploadSection.style.display = 'block';
-                    modal.style.display = 'none';
-
                 } else {
-                    // Profil non trouvé : Demande de création de nom de chaîne
-                    loginBtn.style.display = 'none';
-                    loginMessage.style.display = 'none';
-                    userProfile.style.display = 'none';
-                    uploadSection.style.display = 'none';
+                    // 2b. PROFIL INCOMPLET : Avertissement de chaîne manquante
                     
-                    modal.style.display = 'flex'; 
+                    document.getElementById('userName').textContent = user.displayName; // Affiche nom Google par défaut
+                    document.getElementById('userAvatar').src = user.photoURL;
+                    
+                    // Avertissement visible dans la zone d'upload
+                    publishHint.style.display = 'block'; 
+                    
                 }
-
-            } else {
-                // Utilisateur déconnecté
+                modal.style.display = 'none'; // S'assurer que la modale est cachée après chargement
+            } 
+            else {
+                // Utilisateur déconnecté : Nettoyer l'interface
                 loginBtn.style.display = 'block';
-                loginMessage.style.display = 'block';
                 userProfile.style.display = 'none';
-                uploadSection.style.display = 'none';
+                uploadSection.style.display = 'none'; // Cacher la zone d'upload
                 modal.style.display = 'none';
             }
         });
@@ -181,7 +200,13 @@
             // Récupérer le nom de chaîne personnalisé avant l'upload
             const userDocRef = doc(db, "users", user.uid);
             const userDoc = await getDoc(userDocRef);
-            if (!userDoc.exists()) return alert("Erreur: Profil de chaîne non trouvé.");
+            
+            if (!userDoc.exists() || !userDoc.data().customChannelName) {
+                // Si la chaîne n'est pas créée, ouvrir la modale au lieu d'uploader
+                modal.style.display = 'flex';
+                document.getElementById('status').textContent = "Créez d'abord votre chaîne pour publier !";
+                return;
+            }
             
             const profile = userDoc.data();
             
@@ -192,7 +217,7 @@
 
             if (!file || !title) return alert("Manque titre ou fichier");
 
-            statusTxt.textContent = "Upload en cours...";
+            statusTxt.textContent = "Upload en cours... (Cela peut prendre du temps)";
 
             try {
                 // Upload de la vidéo dans Storage
@@ -206,7 +231,7 @@
                     description: desc,
                     videoUrl: downloadURL,
                     createdAt: new Date(),
-                    channelName: profile.customChannelName, // <--- Nom personnalisé
+                    channelName: profile.customChannelName, // Nom personnalisé
                     channelAvatar: profile.avatarURL,
                     userId: user.uid
                 });
@@ -214,10 +239,11 @@
                 statusTxt.textContent = "✅ Publié !";
                 document.getElementById('vidTitle').value = "";
                 document.getElementById('vidDesc').value = ""; 
+                document.getElementById('videoFile').value = null;
                 loadVideos();
             } catch (error) {
                 console.error(error);
-                statusTxt.textContent = "Erreur upload.";
+                statusTxt.textContent = "Erreur upload. Vérifiez les règles Storage.";
             }
         });
 
