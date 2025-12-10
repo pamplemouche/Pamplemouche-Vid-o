@@ -6,15 +6,23 @@
     <link rel="stylesheet" href="style.css">
     </head>
 <body>
-
     <nav class="navbar">
-        <div class="logo">MyTube Cloud</div>
+        <div class="logo">MyTube <span style="font-size: 12px; color: #aaa;">Secure</span></div>
+        
+        <div class="user-actions">
+            <button id="loginBtn" class="btn" style="background: #4285F4; border: none;">G Se connecter</button>
+            
+            <div id="userProfile" style="display: none; align-items: center; gap: 10px;">
+                <img id="userAvatar" src="" style="width: 32px; height: 32px; border-radius: 50%;">
+                <span id="userName">Pseudo</span>
+                <button id="logoutBtn" class="btn" style="background: #333;">Déconnexion</button>
+            </div>
+        </div>
     </nav>
 
     <div class="container">
-        <aside class="upload-section">
-            <h3>Publier une vidéo</h3>
-            <input type="text" id="channelName" placeholder="Nom de votre chaîne" required>
+        <aside id="uploadSection" class="upload-section" style="display: none;">
+            <h3>🎥 Publier sur ma chaîne</h3>
             <input type="text" id="vidTitle" placeholder="Titre de la vidéo" required>
             <textarea id="vidDesc" placeholder="Description..."></textarea>
             <input type="file" id="videoFile" accept="video/*">
@@ -22,99 +30,152 @@
             <p id="status"></p>
         </aside>
 
+        <div id="loginMessage" style="padding: 20px; background: #202020; margin-bottom: 20px; display: block;">
+            <p>👋 Connectez-vous avec Google pour créer votre chaîne et publier des vidéos !</p>
+        </div>
+
         <main class="feed">
             <h2>Vidéos Récentes</h2>
-            <div id="videoGallery">
-                </div>
+            <div id="videoGallery">Loading...</div>
         </main>
     </div>
 
     <script type="module">
-        // Importation des fonctions nécessaires
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        // Ajout des outils d'authentification
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // --- COLLE TES IDENTIFIANTS FIREBASE ICI ---
         const firebaseConfig = {
-            apiKey: "TA_API_KEY",
-            authDomain: "TON_PROJET.firebaseapp.com",
-            projectId: "TON_PROJET",
-            storageBucket: "TON_PROJET.appspot.com",
+            // --- REMETS TES INFOS DE L'ÉTAPE PRÉCÉDENTE ICI ---
+            apiKey: "...",
+            authDomain: "...",
+            projectId: "...",
+            storageBucket: "...",
             messagingSenderId: "...",
             appId: "..."
         };
-        // -------------------------------------------
 
-        // Initialisation
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const storage = getStorage(app);
+        const auth = getAuth(app); // Initialisation de l'auth
+        const provider = new GoogleAuthProvider(); // Fournisseur Google
 
-        // 1. Logique d'Upload
-        document.getElementById('uploadBtn').addEventListener('click', async () => {
-            const file = document.getElementById('videoFile').files[0];
-            const title = document.getElementById('vidTitle').value;
-            const desc = document.getElementById('vidDesc').value;
-            const channel = document.getElementById('channelName').value;
-            const statusTxt = document.getElementById('status');
+        // --- GESTION DE LA CONNEXION ---
 
-            if (!file || !title) {
-                alert("Veuillez remplir le titre et choisir un fichier.");
-                return;
-            }
-
-            statusTxt.textContent = "Upload en cours... Patientez...";
-
-            try {
-                // A. Upload de la vidéo dans le Storage (Disque dur)
-                const storageRef = ref(storage, 'videos/' + Date.now() + '-' + file.name);
-                await uploadBytes(storageRef, file);
-                const downloadURL = await getDownloadURL(storageRef);
-
-                // B. Sauvegarde des infos dans Firestore (Base de données)
-                await addDoc(collection(db, "videos"), {
-                    title: title,
-                    description: desc,
-                    channel: channel,
-                    videoUrl: downloadURL,
-                    createdAt: new Date()
+        // 1. Clic sur "Se connecter"
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            signInWithPopup(auth, provider)
+                .then((result) => {
+                    console.log("Connecté en tant que : " + result.user.displayName);
+                }).catch((error) => {
+                    console.error("Erreur de connexion", error);
                 });
+        });
 
-                statusTxt.textContent = "Vidéo publiée avec succès !";
-                loadVideos(); // Recharger la liste
-            } catch (error) {
-                console.error("Erreur:", error);
-                statusTxt.textContent = "Erreur lors de l'upload.";
+        // 2. Clic sur "Déconnexion"
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            signOut(auth).then(() => {
+                console.log("Déconnecté");
+            });
+        });
+
+        // 3. SURVEILLANCE DE L'ÉTAT (Le coeur du système)
+        // Cette fonction se déclenche automatiquement dès que l'utilisateur se connecte ou se déconnecte
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // L'utilisateur est connecté
+                document.getElementById('loginBtn').style.display = 'none';
+                document.getElementById('loginMessage').style.display = 'none';
+                
+                document.getElementById('userProfile').style.display = 'flex';
+                document.getElementById('userName').textContent = user.displayName;
+                document.getElementById('userAvatar').src = user.photoURL;
+                
+                // Afficher la zone d'upload
+                document.getElementById('uploadSection').style.display = 'block';
+            } else {
+                // L'utilisateur est déconnecté
+                document.getElementById('loginBtn').style.display = 'block';
+                document.getElementById('loginMessage').style.display = 'block';
+                
+                document.getElementById('userProfile').style.display = 'none';
+                document.getElementById('uploadSection').style.display = 'none';
             }
         });
 
-        // 2. Logique de Lecture (Affichage)
+        // --- GESTION DE L'UPLOAD ---
+        
+        document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const user = auth.currentUser; // On récupère l'utilisateur actuel
+
+            if (!user) {
+                alert("Vous devez être connecté !");
+                return;
+            }
+
+            const file = document.getElementById('videoFile').files[0];
+            const title = document.getElementById('vidTitle').value;
+            const desc = document.getElementById('vidDesc').value;
+            const statusTxt = document.getElementById('status');
+
+            if (!file || !title) return alert("Manque titre ou fichier");
+
+            statusTxt.textContent = "Upload en cours...";
+
+            try {
+                // On range la vidéo dans un dossier au nom de l'utilisateur pour être propre
+                const storageRef = ref(storage, `videos/${user.uid}/${Date.now()}-${file.name}`);
+                await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(storageRef);
+
+                // On sauvegarde avec les infos AUTOMATIQUES de Google (plus de triche sur le nom de chaîne !)
+                await addDoc(collection(db, "videos"), {
+                    title: title,
+                    description: desc,
+                    videoUrl: downloadURL,
+                    createdAt: new Date(),
+                    // INFOS DE LA CHAÎNE (Venant de Google)
+                    channelName: user.displayName,
+                    channelAvatar: user.photoURL,
+                    userId: user.uid // ID unique de l'utilisateur
+                });
+
+                statusTxt.textContent = "✅ Publié !";
+                document.getElementById('vidTitle').value = ""; // Vider le champ
+                loadVideos();
+            } catch (error) {
+                console.error(error);
+                statusTxt.textContent = "Erreur upload.";
+            }
+        });
+
+        // --- CHARGEMENT DES VIDÉOS ---
         async function loadVideos() {
             const gallery = document.getElementById('videoGallery');
-            gallery.innerHTML = ""; // Vider la liste
-
-            // Récupérer les vidéos de la base de données
+            gallery.innerHTML = "";
             const q = query(collection(db, "videos"), orderBy("createdAt", "desc"));
-            const querySnapshot = await getDocs(q);
+            const snapshot = await getDocs(q);
 
-            querySnapshot.forEach((doc) => {
+            snapshot.forEach((doc) => {
                 const data = doc.data();
-                
-                // Création du HTML pour chaque vidéo
-                const videoCard = `
-                    <div class="video-post" style="margin-bottom: 30px; background: #202020; padding: 10px;">
-                        <video controls src="${data.videoUrl}" style="width: 100%;"></video>
-                        <h3>${data.title}</h3>
-                        <p style="color: #aaa; font-size: 12px;">Par <strong>${data.channel}</strong></p>
-                        <p>${data.description}</p>
+                // On ajoute l'avatar de la chaîne à côté du nom
+                gallery.innerHTML += `
+                    <div class="video-post" style="margin-bottom: 30px; background: #202020; padding: 15px; border-radius: 8px;">
+                        <video controls src="${data.videoUrl}" style="width: 100%; border-radius: 4px;"></video>
+                        <h3 style="margin: 10px 0 5px;">${data.title}</h3>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <img src="${data.channelAvatar}" style="width: 24px; height: 24px; border-radius: 50%;">
+                            <span style="color: #aaa; font-size: 13px;">${data.channelName}</span>
+                        </div>
+                        <p style="color: #ddd;">${data.description || ''}</p>
                     </div>
                 `;
-                gallery.innerHTML += videoCard;
             });
         }
 
-        // Charger les vidéos au démarrage
         loadVideos();
     </script>
 </body>
