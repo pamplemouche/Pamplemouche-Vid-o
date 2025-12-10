@@ -2,18 +2,20 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Mon YouTube avec Firebase</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyTube Cloud - Chaînes Personnalisées</title>
     <link rel="stylesheet" href="style.css">
-    </head>
+</head>
 <body>
+
     <nav class="navbar">
-        <div class="logo">MyTube <span style="font-size: 12px; color: #aaa;">Secure</span></div>
+        <div class="logo">MyTube <span style="font-size: 12px; color: #aaa;">Sécurisé</span></div>
         
         <div class="user-actions">
             <button id="loginBtn" class="btn" style="background: #4285F4; border: none;">G Se connecter</button>
             
             <div id="userProfile" style="display: none; align-items: center; gap: 10px;">
-                <img id="userAvatar" src="" style="width: 32px; height: 32px; border-radius: 50%;">
+                <img id="userAvatar" src="" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%;">
                 <span id="userName">Pseudo</span>
                 <button id="logoutBtn" class="btn" style="background: #333;">Déconnexion</button>
             </div>
@@ -36,86 +38,153 @@
 
         <main class="feed">
             <h2>Vidéos Récentes</h2>
-            <div id="videoGallery">Loading...</div>
+            <div id="videoGallery">Chargement des vidéos...</div>
         </main>
     </div>
 
+    <div id="channelSetupModal" style="
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0, 0, 0, 0.9); z-index: 200; 
+        display: none; justify-content: center; align-items: center;">
+        
+        <div style="background: #282828; padding: 30px; border-radius: 8px; width: 300px; text-align: center;">
+            <h3 style="color: white;">Bienvenue sur MyTube !</h3>
+            <p style="color: #ccc;">Choisissez le nom de votre chaîne (il sera affiché publiquement) :</p>
+            <input type="text" id="customChannelNameInput" placeholder="Ex: Ma Super Chaîne" style="width: 90%; padding: 10px; margin-bottom: 15px; border: 1px solid #444; background: #121212; color: white;">
+            <button id="saveChannelNameBtn" class="btn" style="background: red; border: none; padding: 10px 20px; cursor: pointer;">Enregistrer</button>
+        </div>
+    </div>
+
+
     <script type="module">
+        // Importations des modules Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, orderBy, query, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-        // Ajout des outils d'authentification
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+        // --- CONFIGURATION FIREBASE (À REMPLACER) ---
         const firebaseConfig = {
-            // --- REMETS TES INFOS DE L'ÉTAPE PRÉCÉDENTE ICI ---
-            apiKey: "...",
-            authDomain: "...",
-            projectId: "...",
-            storageBucket: "...",
+            apiKey: "TA_API_KEY", // <--- REMPLACER
+            authDomain: "TON_PROJET.firebaseapp.com", // <--- REMPLACER
+            projectId: "TON_PROJET", // <--- REMPLACER
+            storageBucket: "TON_PROJET.appspot.com", // <--- REMPLACER
             messagingSenderId: "...",
             appId: "..."
         };
+        // -------------------------------------------
 
+        // Initialisation
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const storage = getStorage(app);
-        const auth = getAuth(app); // Initialisation de l'auth
-        const provider = new GoogleAuthProvider(); // Fournisseur Google
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
 
-        // --- GESTION DE LA CONNEXION ---
+        // --- 1. GESTION AUTHENTIFICATION ET PROFIL (Nom de Chaîne) ---
 
-        // 1. Clic sur "Se connecter"
+        // Connexion
         document.getElementById('loginBtn').addEventListener('click', () => {
             signInWithPopup(auth, provider)
-                .then((result) => {
-                    console.log("Connecté en tant que : " + result.user.displayName);
-                }).catch((error) => {
-                    console.error("Erreur de connexion", error);
-                });
+                .catch((error) => console.error("Erreur de connexion", error));
         });
 
-        // 2. Clic sur "Déconnexion"
+        // Déconnexion
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            signOut(auth).then(() => {
-                console.log("Déconnecté");
-            });
+            signOut(auth);
         });
 
-        // 3. SURVEILLANCE DE L'ÉTAT (Le coeur du système)
-        // Cette fonction se déclenche automatiquement dès que l'utilisateur se connecte ou se déconnecte
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // L'utilisateur est connecté
-                document.getElementById('loginBtn').style.display = 'none';
-                document.getElementById('loginMessage').style.display = 'none';
-                
-                document.getElementById('userProfile').style.display = 'flex';
-                document.getElementById('userName').textContent = user.displayName;
-                document.getElementById('userAvatar').src = user.photoURL;
-                
-                // Afficher la zone d'upload
-                document.getElementById('uploadSection').style.display = 'block';
-            } else {
-                // L'utilisateur est déconnecté
-                document.getElementById('loginBtn').style.display = 'block';
-                document.getElementById('loginMessage').style.display = 'block';
-                
-                document.getElementById('userProfile').style.display = 'none';
-                document.getElementById('uploadSection').style.display = 'none';
-            }
-        });
+        // Sauvegarde du nom de chaîne personnalisé
+        document.getElementById('saveChannelNameBtn').addEventListener('click', async () => {
+            const user = auth.currentUser;
+            const customName = document.getElementById('customChannelNameInput').value.trim();
+            const modal = document.getElementById('channelSetupModal');
 
-        // --- GESTION DE L'UPLOAD ---
-        
-        document.getElementById('uploadBtn').addEventListener('click', async () => {
-            const user = auth.currentUser; // On récupère l'utilisateur actuel
-
-            if (!user) {
-                alert("Vous devez être connecté !");
+            if (customName.length < 3) {
+                alert("Le nom de la chaîne doit contenir au moins 3 caractères.");
                 return;
             }
 
+            try {
+                // Sauvegarde le nom de chaîne dans la collection 'users'
+                await setDoc(doc(db, "users", user.uid), {
+                    customChannelName: customName,
+                    googleName: user.displayName,
+                    avatarURL: user.photoURL,
+                    userId: user.uid
+                });
+
+                modal.style.display = 'none';
+                window.location.reload(); // Recharger l'interface
+
+            } catch (error) {
+                console.error("Erreur lors de la sauvegarde du nom de chaîne:", error);
+                alert("Impossible d'enregistrer le nom de chaîne.");
+            }
+        });
+
+        // Surveillance de l'état de connexion
+        onAuthStateChanged(auth, async (user) => {
+            const uploadSection = document.getElementById('uploadSection');
+            const loginMessage = document.getElementById('loginMessage');
+            const loginBtn = document.getElementById('loginBtn');
+            const userProfile = document.getElementById('userProfile');
+            const modal = document.getElementById('channelSetupModal');
+
+            if (user) {
+                // Utilisateur connecté. Vérifie si le profil de chaîne existe.
+                const userDocRef = doc(db, "users", user.uid);
+                const userDoc = await getDoc(userDocRef);
+                
+                if (userDoc.exists()) {
+                    // Profil trouvé : Affichage des infos personnalisées
+                    const profile = userDoc.data();
+                    
+                    loginBtn.style.display = 'none';
+                    loginMessage.style.display = 'none';
+                    userProfile.style.display = 'flex';
+                    
+                    document.getElementById('userName').textContent = profile.customChannelName;
+                    document.getElementById('userAvatar').src = profile.avatarURL;
+                    
+                    uploadSection.style.display = 'block';
+                    modal.style.display = 'none';
+
+                } else {
+                    // Profil non trouvé : Demande de création de nom de chaîne
+                    loginBtn.style.display = 'none';
+                    loginMessage.style.display = 'none';
+                    userProfile.style.display = 'none';
+                    uploadSection.style.display = 'none';
+                    
+                    modal.style.display = 'flex'; 
+                }
+
+            } else {
+                // Utilisateur déconnecté
+                loginBtn.style.display = 'block';
+                loginMessage.style.display = 'block';
+                userProfile.style.display = 'none';
+                uploadSection.style.display = 'none';
+                modal.style.display = 'none';
+            }
+        });
+
+
+        // --- 2. GESTION DE L'UPLOAD ---
+
+        document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const user = auth.currentUser;
+
+            if (!user) return alert("Vous devez être connecté !");
+
+            // Récupérer le nom de chaîne personnalisé avant l'upload
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+            if (!userDoc.exists()) return alert("Erreur: Profil de chaîne non trouvé.");
+            
+            const profile = userDoc.data();
+            
             const file = document.getElementById('videoFile').files[0];
             const title = document.getElementById('vidTitle').value;
             const desc = document.getElementById('vidDesc').value;
@@ -126,25 +195,25 @@
             statusTxt.textContent = "Upload en cours...";
 
             try {
-                // On range la vidéo dans un dossier au nom de l'utilisateur pour être propre
+                // Upload de la vidéo dans Storage
                 const storageRef = ref(storage, `videos/${user.uid}/${Date.now()}-${file.name}`);
                 await uploadBytes(storageRef, file);
                 const downloadURL = await getDownloadURL(storageRef);
 
-                // On sauvegarde avec les infos AUTOMATIQUES de Google (plus de triche sur le nom de chaîne !)
+                // Sauvegarde des infos dans Firestore
                 await addDoc(collection(db, "videos"), {
                     title: title,
                     description: desc,
                     videoUrl: downloadURL,
                     createdAt: new Date(),
-                    // INFOS DE LA CHAÎNE (Venant de Google)
-                    channelName: user.displayName,
-                    channelAvatar: user.photoURL,
-                    userId: user.uid // ID unique de l'utilisateur
+                    channelName: profile.customChannelName, // <--- Nom personnalisé
+                    channelAvatar: profile.avatarURL,
+                    userId: user.uid
                 });
 
                 statusTxt.textContent = "✅ Publié !";
-                document.getElementById('vidTitle').value = ""; // Vider le champ
+                document.getElementById('vidTitle').value = "";
+                document.getElementById('vidDesc').value = ""; 
                 loadVideos();
             } catch (error) {
                 console.error(error);
@@ -152,22 +221,27 @@
             }
         });
 
-        // --- CHARGEMENT DES VIDÉOS ---
+        // --- 3. GESTION DE LA LECTURE (Affichage) ---
+
         async function loadVideos() {
             const gallery = document.getElementById('videoGallery');
             gallery.innerHTML = "";
             const q = query(collection(db, "videos"), orderBy("createdAt", "desc"));
             const snapshot = await getDocs(q);
 
+            if (snapshot.empty) {
+                gallery.innerHTML = "<p>Aucune vidéo publiée pour le moment.</p>";
+                return;
+            }
+
             snapshot.forEach((doc) => {
                 const data = doc.data();
-                // On ajoute l'avatar de la chaîne à côté du nom
                 gallery.innerHTML += `
                     <div class="video-post" style="margin-bottom: 30px; background: #202020; padding: 15px; border-radius: 8px;">
-                        <video controls src="${data.videoUrl}" style="width: 100%; border-radius: 4px;"></video>
+                        <video controls src="${data.videoUrl}" style="width: 100%; max-height: 400px; border-radius: 4px;"></video>
                         <h3 style="margin: 10px 0 5px;">${data.title}</h3>
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                            <img src="${data.channelAvatar}" style="width: 24px; height: 24px; border-radius: 50%;">
+                            <img src="${data.channelAvatar}" alt="Avatar Chaîne" style="width: 24px; height: 24px; border-radius: 50%;">
                             <span style="color: #aaa; font-size: 13px;">${data.channelName}</span>
                         </div>
                         <p style="color: #ddd;">${data.description || ''}</p>
