@@ -16,6 +16,7 @@ body {
     position: sticky;
     top: 0;
     z-index: 100;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 .logo {
@@ -24,51 +25,92 @@ body {
     color: red;
 }
 
-.search-bar {
-    display: flex;
-    width: 40%;
-}
-
-.search-bar input {
-    width: 100%;
-    padding: 8px;
-    background: #121212;
-    border: 1px solid #303030;
-    color: white;
-}
-
-/* Bouton Upload Stylisé */
-.upload-btn-wrapper {
-    position: relative;
-    overflow: hidden;
-    display: inline-block;
-}
-
+/* Boutons et Inputs généraux */
 .btn {
-    border: 1px solid gray;
+    border: none;
     color: white;
     background-color: #303030;
-    padding: 8px 20px;
+    padding: 8px 15px;
     border-radius: 2px;
     font-weight: bold;
-  /* Ajout pour la mise en page Upload vs Lecture */
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn:hover {
+    background-color: #444;
+}
+
+/* Layout Principal */
+.container {
+    display: flex;
+    padding: 20px;
+    gap: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Section d'Upload */
 .upload-section {
     flex: 1;
     background: #202020;
     padding: 20px;
+    border-radius: 8px;
     height: fit-content;
 }
 
-.upload-section input, .upload-section textarea {
+.upload-section h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #333;
+    padding-bottom: 10px;
+}
+
+.upload-section input[type="text"], 
+.upload-section textarea,
+.upload-section input[type="file"] {
     display: block;
-    width: 90%;
-    margin-bottom: 10px;
+    width: calc(100% - 20px);
+    margin-bottom: 15px;
     background: #121212;
     border: 1px solid #333;
     color: white;
     padding: 10px;
+    box-sizing: border-box;
 }
 
+.upload-section textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.upload-section #uploadBtn {
+    width: 100%;
+    background-color: red;
+}
+
+.upload-section #uploadBtn:hover {
+    background-color: darkred;
+}
+
+/* Fil de Vidéos */
 .feed {
     flex: 3;
+}
+
+.feed h2 {
+    color: white;
+    border-bottom: 1px solid #333;
+    padding-bottom: 10px;
+}
+
+/* Responsive pour mobile */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+        padding: 10px;
+    }
+    .navbar {
+        flex-direction: column;
+        gap: 10px;
+    }
 }
